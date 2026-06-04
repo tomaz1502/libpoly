@@ -3,6 +3,8 @@
 
 #include "doctest.h"
 
+#include <random>
+
 using namespace poly;
 
 TEST_CASE("polynomial::properties") {
@@ -99,6 +101,59 @@ TEST_CASE("polynomial::resultant_bezout") {
     Polynomial v = std::get<2>(result);
     Polynomial expected_res = resultant(p, q);
     CHECK(res == expected_res);
+    CHECK(u * p + v * q == res);
+  }
+}
+
+TEST_CASE("polynomial::resultant_bezout_random") {
+  // x must be declared last so it has the highest variable ID and becomes the
+  // top variable in the polynomial ordering.
+  Variable y("y");
+  Variable z("z");
+  Variable w("w");
+  Variable t("t");
+  Variable x("x");
+
+  std::mt19937 rng(42);
+
+  auto rand_int = [&](int lo, int hi) -> int {
+    return std::uniform_int_distribution<int>(lo, hi)(rng);
+  };
+
+  auto rand_nonzero = [&]() -> int {
+    int c = rand_int(1, 3);
+    if (rand_int(0, 1)) c = -c;
+    return c;
+  };
+
+  auto rand_poly = [&]() -> Polynomial {
+    int deg = rand_int(1, 5);
+    Polynomial result = rand_nonzero() * pow(x, deg);
+    for (int d = deg - 1; d >= 0; --d) {
+      int nterms = rand_int(0, 6);
+      for (int j = 0; j < nterms; ++j) {
+        Integer coeff(rand_nonzero());
+        Polynomial term(coeff);
+        if (rand_int(0, 1)) term = term * y;
+        if (rand_int(0, 1)) term = term * z;
+        if (rand_int(0, 1)) term = term * w;
+        if (rand_int(0, 1)) term = term * t;
+        if (d > 0) term = term * pow(x, d);
+        result = result + term;
+      }
+    }
+    return result;
+  };
+
+  for (int iter = 0; iter < 200; ++iter) {
+    Polynomial p = rand_poly();
+    Polynomial q = rand_poly();
+
+    std::tuple<Polynomial, Polynomial, Polynomial> rb = resultant_bezout(p, q);
+    Polynomial res = std::get<0>(rb);
+    Polynomial u = std::get<1>(rb);
+    Polynomial v = std::get<2>(rb);
+    CHECK(res == resultant(p, q));
     CHECK(u * p + v * q == res);
   }
 }
