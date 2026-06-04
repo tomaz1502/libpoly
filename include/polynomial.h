@@ -296,6 +296,14 @@ void lp_polynomial_pp_cont(lp_polynomial_t* pp, lp_polynomial_t* cont, const lp_
 void lp_polynomial_resultant(lp_polynomial_t* res, const lp_polynomial_t* A1, const lp_polynomial_t* A2);
 
 /**
+ * Compute the resultant of A and B along with Bezout coefficients u, v such
+ * that u*A + v*B = resultant(A, B). Both A and B must be (non-trivial)
+ * polynomials over the same variable.
+ */
+void lp_polynomial_resultant_bezout(lp_polynomial_t* res, lp_polynomial_t* u, lp_polynomial_t* v,
+    const lp_polynomial_t* A, const lp_polynomial_t* B);
+
+/**
  * Compute the principal subresultant coefficients (psc) of A1 and A2. Both A1
  * and A2 must be (non-trivial) polynomials over the same variable. If
  * deg(A1) = m, deg(A2) = n, and output will be of size min(m, n)+1.

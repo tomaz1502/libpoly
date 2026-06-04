@@ -445,6 +445,17 @@ namespace poly {
                             q.get_internal());
     return res;
   }
+  std::tuple<Polynomial, Polynomial, Polynomial> resultant_bezout(
+      const Polynomial& p, const Polynomial& q) {
+    Polynomial res(detail::context(p, q));
+    Polynomial u(detail::context(p, q));
+    Polynomial v(detail::context(p, q));
+    lp_polynomial_resultant_bezout(res.get_internal(), u.get_internal(),
+                                   v.get_internal(), p.get_internal(),
+                                   q.get_internal());
+    return std::make_tuple(std::move(res), std::move(u), std::move(v));
+  }
+
   Polynomial discriminant(const Polynomial& p) {
     if (degree(p) == 1) {
       // Derivative is constant, making the resultant trivial

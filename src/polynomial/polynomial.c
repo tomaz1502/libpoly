@@ -1046,6 +1046,32 @@ void lp_polynomial_resultant(lp_polynomial_t* res, const lp_polynomial_t* A, con
   }
 }
 
+void lp_polynomial_resultant_bezout(lp_polynomial_t* res, lp_polynomial_t* u, lp_polynomial_t* v,
+    const lp_polynomial_t* A, const lp_polynomial_t* B) {
+
+  if (trace_is_enabled("polynomial")) {
+    tracef("polynomial_resultant_bezout("); lp_polynomial_print(A, trace_out); tracef(", "); lp_polynomial_print(B, trace_out); tracef(")\n");
+  }
+
+  assert(A->data.type == COEFFICIENT_POLYNOMIAL);
+  assert(B->data.type == COEFFICIENT_POLYNOMIAL);
+  assert(VAR(&A->data) == VAR(&B->data));
+
+  const lp_polynomial_context_t* ctx = A->ctx;
+  assert(lp_polynomial_context_equal(B->ctx, ctx));
+
+  lp_polynomial_external_clean(A);
+  lp_polynomial_external_clean(B);
+
+  coefficient_resultant_bezout(ctx, &res->data, &u->data, &v->data, &A->data, &B->data);
+
+  if (trace_is_enabled("polynomial")) {
+    tracef("polynomial_resultant_bezout() => res = "); lp_polynomial_print(res, trace_out);
+    tracef(", u = "); lp_polynomial_print(u, trace_out);
+    tracef(", v = "); lp_polynomial_print(v, trace_out); tracef("\n");
+  }
+}
+
 void lp_polynomial_factor_square_free(const lp_polynomial_t* A, lp_polynomial_t*** factors, size_t** multiplicities, size_t* size) {
 
   if (trace_is_enabled("polynomial")) {

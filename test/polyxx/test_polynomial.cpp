@@ -50,6 +50,59 @@ TEST_CASE("polynomial::resultant") {
   CHECK(r == 28588707 * pow(y, 5) - 49925970 * pow(y, 4) + 34802730 * pow(y, 3) - 12107160 * pow(y, 2) + 2102235 * y - 145774);
 }
 
+TEST_CASE("polynomial::resultant_bezout") {
+  Variable y("y");
+  Variable x("x");
+
+  SUBCASE("different degrees") {
+    Polynomial p = 1 * pow(x, 6) + 2 * pow(x, 5) + 3 * y - 1;
+    Polynomial q = 7 * pow(x, 5) + 5 * pow(x, 4);
+    std::tuple<Polynomial, Polynomial, Polynomial> result = resultant_bezout(p, q);
+    Polynomial res = std::get<0>(result);
+    Polynomial u = std::get<1>(result);
+    Polynomial v = std::get<2>(result);
+    Polynomial expected_res = resultant(p, q);
+    CHECK(res == expected_res);
+    CHECK(u * p + v * q == res);
+  }
+
+  SUBCASE("equal degrees") {
+    Polynomial p = pow(x, 2) + y * x + 1;
+    Polynomial q = pow(x, 2) + x + y;
+    std::tuple<Polynomial, Polynomial, Polynomial> result = resultant_bezout(p, q);
+    Polynomial res = std::get<0>(result);
+    Polynomial u = std::get<1>(result);
+    Polynomial v = std::get<2>(result);
+    Polynomial expected_res = resultant(p, q);
+    CHECK(res == expected_res);
+    CHECK(u * p + v * q == res);
+  }
+
+  SUBCASE("swapped order (deg(p) < deg(q))") {
+    Polynomial p = 7 * pow(x, 5) + 5 * pow(x, 4);
+    Polynomial q = 1 * pow(x, 6) + 2 * pow(x, 5) + 3 * y - 1;
+    std::tuple<Polynomial, Polynomial, Polynomial> result = resultant_bezout(p, q);
+    Polynomial res = std::get<0>(result);
+    Polynomial u = std::get<1>(result);
+    Polynomial v = std::get<2>(result);
+    Polynomial expected_res = resultant(p, q);
+    CHECK(res == expected_res);
+    CHECK(u * p + v * q == res);
+  }
+
+  SUBCASE("linear polynomials") {
+    Polynomial p = 2 * x + y;
+    Polynomial q = 3 * x + 1;
+    std::tuple<Polynomial, Polynomial, Polynomial> result = resultant_bezout(p, q);
+    Polynomial res = std::get<0>(result);
+    Polynomial u = std::get<1>(result);
+    Polynomial v = std::get<2>(result);
+    Polynomial expected_res = resultant(p, q);
+    CHECK(res == expected_res);
+    CHECK(u * p + v * q == res);
+  }
+}
+
 TEST_CASE("polynomial::discriminant") {
   Variable y("y");
   Variable x("x");

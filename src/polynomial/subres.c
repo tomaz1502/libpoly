@@ -547,3 +547,228 @@ void coefficient_psc(const lp_polynomial_context_t* ctx, coefficient_t* psc, con
   STAT_INCR(coefficient, psc)
   subres(ctx, psc, C1, C2, 1);
 }
+
+void coefficient_resultant_bezout(const lp_polynomial_context_t* ctx,
+    coefficient_t* res, coefficient_t* u, coefficient_t* v,
+    const coefficient_t* P, const coefficient_t* Q) {
+
+  if (trace_is_enabled("coefficient::resultant")) {
+    tracef("coefficient_resultant_bezout()\n");
+    tracef("P = "); coefficient_print(ctx, P, trace_out); tracef("\n");
+    tracef("Q = "); coefficient_print(ctx, Q, trace_out); tracef("\n");
+  }
+
+  assert(P->type == COEFFICIENT_POLYNOMIAL);
+  assert(Q->type == COEFFICIENT_POLYNOMIAL);
+  assert(VAR(P) == VAR(Q));
+
+  size_t P_deg = coefficient_degree(P);
+  size_t Q_deg = coefficient_degree(Q);
+
+  // Handle deg(P) < deg(Q) by swapping
+  if (P_deg < Q_deg) {
+    coefficient_resultant_bezout(ctx, res, v, u, Q, P);
+    // res(P, Q) = (-1)^(P_deg * Q_deg) * res(Q, P)
+    if ((P_deg % 2) && (Q_deg % 2)) {
+      coefficient_neg(ctx, res, res);
+      coefficient_neg(ctx, u, u);
+      coefficient_neg(ctx, v, v);
+    }
+    return;
+  }
+
+  lp_variable_t x = VAR(P);
+
+  // s = lc(Q)^(deg(P) - deg(Q))
+  coefficient_t s;
+  coefficient_construct(ctx, &s);
+  coefficient_pow(ctx, &s, coefficient_lc(Q), P_deg - Q_deg);
+
+  // A = Q, with cofactors uA = 0, vA = 1
+  coefficient_t A;
+  coefficient_construct_copy(ctx, &A, Q);
+  coefficient_t uA, vA;
+  coefficient_construct(ctx, &uA);
+  coefficient_construct_from_int(ctx, &vA, 1);
+
+  // B = prem(P, -Q), tracking cofactors via pdivrem
+  // pdivrem(P, -Q) gives (D, R) where lc(-Q)^(delta+1) * P = D * (-Q) + R
+  // So R = lc(-Q)^(delta+1) * P + D * Q
+  // uB = lc(-Q)^(delta+1), vB = D
+  coefficient_t neg_Q;
+  coefficient_construct_copy(ctx, &neg_Q, Q);
+  coefficient_neg(ctx, &neg_Q, &neg_Q);
+
+  coefficient_t B, D;
+  coefficient_construct(ctx, &B);
+  coefficient_construct(ctx, &D);
+  coefficient_pdivrem(ctx, &D, &B, P, &neg_Q);
+
+  coefficient_t uB, vB;
+  // uB = (-lc(Q))^(delta+1) = lc(-Q)^(delta+1)
+  coefficient_construct(ctx, &uB);
+  coefficient_pow(ctx, &uB, coefficient_lc(&neg_Q), P_deg - Q_deg + 1);
+  // vB = D (the pseudo-quotient)
+  coefficient_construct_copy(ctx, &vB, &D);
+
+  coefficient_destruct(&neg_Q);
+
+  if (trace_is_enabled("coefficient::resultant")) {
+    tracef("A = "); coefficient_print(ctx, &A, trace_out); tracef("\n");
+    tracef("B = "); coefficient_print(ctx, &B, trace_out); tracef("\n");
+    tracef("uA = "); coefficient_print(ctx, &uA, trace_out); tracef("\n");
+    tracef("vA = "); coefficient_print(ctx, &vA, trace_out); tracef("\n");
+    tracef("uB = "); coefficient_print(ctx, &uB, trace_out); tracef("\n");
+    tracef("vB = "); coefficient_print(ctx, &vB, trace_out); tracef("\n");
+  }
+
+  // Temporaries
+  coefficient_t C, uC, vC, pow, mult, tmp;
+  coefficient_construct(ctx, &C);
+  coefficient_construct(ctx, &uC);
+  coefficient_construct(ctx, &vC);
+  coefficient_construct(ctx, &pow);
+  coefficient_construct(ctx, &mult);
+  coefficient_construct(ctx, &tmp);
+
+  // Track whether we found the result
+  int found_zero = 0;
+
+  for (;;) {
+
+    int d = coefficient_degree_safe(ctx, &A, x);
+    int e = coefficient_degree_safe(ctx, &B, x);
+    assert(d > e);
+
+    if (coefficient_is_zero(ctx, &B)) {
+      found_zero = 1;
+      break;
+    }
+
+    int delta = d - e;
+    if (delta > 1) {
+      // C = lc(B)^(delta-1) * B / s^(delta-1)
+      coefficient_pow(ctx, &pow, coefficient_lc_safe(ctx, &B, x), delta - 1);
+      coefficient_mul(ctx, &C, &pow, &B);
+      // uC = pow * uB, vC = pow * vB (before dividing by s^(delta-1))
+      coefficient_mul(ctx, &uC, &pow, &uB);
+      coefficient_mul(ctx, &vC, &pow, &vB);
+
+      coefficient_pow(ctx, &pow, &s, delta - 1);
+      coefficient_div(ctx, &C, &C, &pow);
+      coefficient_div(ctx, &uC, &uC, &pow);
+      coefficient_div(ctx, &vC, &vC, &pow);
+    } else {
+      coefficient_assign(ctx, &C, &B);
+      coefficient_assign(ctx, &uC, &uB);
+      coefficient_assign(ctx, &vC, &vB);
+    }
+
+    if (trace_is_enabled("coefficient::resultant")) {
+      tracef("C = "); coefficient_print(ctx, &C, trace_out); tracef("\n");
+      tracef("uC = "); coefficient_print(ctx, &uC, trace_out); tracef("\n");
+      tracef("vC = "); coefficient_print(ctx, &vC, trace_out); tracef("\n");
+    }
+
+    if (e == 0) {
+      break;
+    }
+
+    // Compute new B = prem(A, -B) / (s^delta * lc(A))
+    // We need pdivrem(A, -B_old) and the old cofactors of B
+    // Save -B_old for pdivrem
+    coefficient_t neg_B;
+    coefficient_construct_copy(ctx, &neg_B, &B);
+    coefficient_neg(ctx, &neg_B, &neg_B);
+
+    // pdivrem(A, -B_old) -> (D, R)
+    // lc(-B_old)^(delta+1) * A = D * (-B_old) + R
+    // R = lc(-B_old)^(delta+1) * A + D * B_old
+    coefficient_pdivrem(ctx, &D, &B, &A, &neg_B);
+    // Now B holds R (the pseudo-remainder)
+
+    // mult = lc(-B_old)^(delta+1)
+    coefficient_pow(ctx, &mult, coefficient_lc(&neg_B), delta + 1);
+
+    coefficient_destruct(&neg_B);
+
+    // uR = mult * uA + D * uB_old
+    // vR = mult * vA + D * vB_old
+    // But uB/vB still hold the OLD values since pdivrem wrote into B, not uB/vB
+    coefficient_t uR, vR;
+    coefficient_construct(ctx, &uR);
+    coefficient_construct(ctx, &vR);
+
+    coefficient_mul(ctx, &uR, &mult, &uA);
+    coefficient_mul(ctx, &tmp, &D, &uB);
+    coefficient_add(ctx, &uR, &uR, &tmp);
+
+    coefficient_mul(ctx, &vR, &mult, &vA);
+    coefficient_mul(ctx, &tmp, &D, &vB);
+    coefficient_add(ctx, &vR, &vR, &tmp);
+
+    // Divide by s^delta * lc(A)
+    coefficient_pow(ctx, &pow, &s, delta);
+    coefficient_mul(ctx, &pow, &pow, coefficient_lc_safe(ctx, &A, x));
+    coefficient_div(ctx, &B, &B, &pow);
+    coefficient_div(ctx, &uR, &uR, &pow);
+    coefficient_div(ctx, &vR, &vR, &pow);
+
+    // A <- C, s = lc(A)
+    coefficient_swap(&A, &C);
+    coefficient_assign(ctx, &uA, &uC);
+    coefficient_assign(ctx, &vA, &vC);
+    coefficient_assign(ctx, &s, coefficient_lc_safe(ctx, &A, x));
+
+    // B cofactors <- R cofactors
+    coefficient_assign(ctx, &uB, &uR);
+    coefficient_assign(ctx, &vB, &vR);
+
+    coefficient_destruct(&uR);
+    coefficient_destruct(&vR);
+
+    if (trace_is_enabled("coefficient::resultant")) {
+      tracef("A = "); coefficient_print(ctx, &A, trace_out); tracef("\n");
+      tracef("B = "); coefficient_print(ctx, &B, trace_out); tracef("\n");
+      tracef("uA = "); coefficient_print(ctx, &uA, trace_out); tracef("\n");
+      tracef("vA = "); coefficient_print(ctx, &vA, trace_out); tracef("\n");
+      tracef("uB = "); coefficient_print(ctx, &uB, trace_out); tracef("\n");
+      tracef("vB = "); coefficient_print(ctx, &vB, trace_out); tracef("\n");
+    }
+  }
+
+  if (found_zero) {
+    // Resultant is 0
+    coefficient_assign_int(ctx, res, 0);
+    coefficient_assign_int(ctx, u, 0);
+    coefficient_assign_int(ctx, v, 0);
+  } else {
+    // C is the resultant at e == 0
+    coefficient_swap(res, &C);
+    coefficient_swap(u, &uC);
+    coefficient_swap(v, &vC);
+  }
+
+  // Cleanup
+  coefficient_destruct(&A);
+  coefficient_destruct(&B);
+  coefficient_destruct(&C);
+  coefficient_destruct(&D);
+  coefficient_destruct(&uA);
+  coefficient_destruct(&vA);
+  coefficient_destruct(&uB);
+  coefficient_destruct(&vB);
+  coefficient_destruct(&uC);
+  coefficient_destruct(&vC);
+  coefficient_destruct(&pow);
+  coefficient_destruct(&mult);
+  coefficient_destruct(&tmp);
+  coefficient_destruct(&s);
+
+  if (trace_is_enabled("coefficient::resultant")) {
+    tracef("coefficient_resultant_bezout() =>\n");
+    tracef("res = "); coefficient_print(ctx, res, trace_out); tracef("\n");
+    tracef("u = "); coefficient_print(ctx, u, trace_out); tracef("\n");
+    tracef("v = "); coefficient_print(ctx, v, trace_out); tracef("\n");
+  }
+}

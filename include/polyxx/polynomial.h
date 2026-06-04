@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iosfwd>
+#include <tuple>
 #include <vector>
 
 #include "../polynomial.h"
@@ -236,6 +237,10 @@ namespace poly {
 
   /** Compute the resultant of two polynomials. */
   Polynomial resultant(const Polynomial& p, const Polynomial& q);
+  /** Compute the resultant and Bezout coefficients (u, v) such that
+   *  u*p + v*q = resultant(p, q). */
+  std::tuple<Polynomial, Polynomial, Polynomial> resultant_bezout(
+      const Polynomial& p, const Polynomial& q);
   /** Compute the discriminant of a polynomial. */
   Polynomial discriminant(const Polynomial& p);
 

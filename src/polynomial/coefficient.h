@@ -329,6 +329,14 @@ void coefficient_derivative(const lp_polynomial_context_t* ctx, coefficient_t* C
 void coefficient_resultant(const lp_polynomial_context_t* ctx, coefficient_t* res, const coefficient_t* C1, const coefficient_t* C2);
 
 /**
+ * Compute the resultant of P and Q along with Bezout coefficients u, v such
+ * that u*P + v*Q = resultant(P, Q).
+ */
+void coefficient_resultant_bezout(const lp_polynomial_context_t* ctx,
+    coefficient_t* res, coefficient_t* u, coefficient_t* v,
+    const coefficient_t* P, const coefficient_t* Q);
+
+/**
  * Compute the subresultant sequence.
  * sr should be a constructed array of size deg(B) + 1 filled with 0.
  */
